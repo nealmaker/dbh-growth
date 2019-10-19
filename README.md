@@ -1,4 +1,4 @@
-# dbh-growth-nf
+# dbh-growth
 Diameter growth models for trees in the United States Northern Forest region.  
 Constructed using US Forest Service [FIA data](https://github.com/nealmaker/fia-data-nf) and Wright's 'ranger' implementation of Random Forest. 
 
