@@ -14,14 +14,18 @@ nf_fia <- nf_fia %>%
   filter(status_change == "lived") %>% 
   select(dbh_rate, spp, dbh_mid, cr_mid, crown_class_s, tree_class_s,
          ba_mid, bal_mid, forest_type_s, stocking_s, landscape, 
-         site_class, slope, aspect, lat, lon, elev) 
+         site_class, slope, aspect, lat, lon, elev, plot) 
 
 # test set is 20% of full dataset
 test_size <- .2
 
+# define test set based on plots (to make it truely independent)
 set.seed(10)
-index <- createDataPartition(nf_fia$dbh_rate, times = 1, p = test_size, list = FALSE)
+test_plots <- sample(unique(nf_fia$plot), 
+                     size = round(test_size*length(unique(nf_fia$plot))), 
+                     replace = FALSE)
 
+index <- which(nf_fia$plot %in% test_plots)
 train <- nf_fia[-index,]
 test <- nf_fia[index,]
 
@@ -34,8 +38,8 @@ preproc <- preProcess(train[,-1], method = c("center", "scale", "YeoJohnson"))
 train_tran <- predict(preproc, train)
 test_tran <- predict(preproc, test)
 
-x <- train_tran[,-1]
-y <- train_tran[,1]
+x <- select(train_tran, -plot, -dbh_rate)
+y <- select(train_tran, dbh_rate)
 
 
 #####################################################################
