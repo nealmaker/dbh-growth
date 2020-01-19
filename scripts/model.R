@@ -14,7 +14,10 @@ nf_fia <- nf_fia %>%
   filter(status_change == "lived") %>% 
   select(dbh_rate, spp, dbh_mid, cr_mid, crown_class_s, tree_class_s,
          ba_mid, bal_mid, forest_type_s, stocking_s, landscape, 
-         site_class, slope, aspect, lat, lon, elev, plot) 
+         site_class, slope, aspect, lat, lon, elev, plot) %>% 
+  rename(dbh = dbh_mid, cr = cr_mid, crown_class = crown_class_s,
+         tree_class = tree_class_s, ba = ba_mid, bal = bal_mid,
+         forest_type = forest_type_s, stocking = stocking_s)
 
 # test set is 20% of full dataset
 test_size <- .2
