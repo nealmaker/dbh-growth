@@ -32,33 +32,19 @@ index <- which(nf_fia$plot %in% test_plots)
 train <- nf_fia[-index,]
 test <- nf_fia[index,]
 
-
-#####################################################################
-# Preprocess data
-#####################################################################
-
-preproc <- preProcess(train[,-1], method = c("center", "scale", "YeoJohnson"))
-train_tran <- predict(preproc, train)
-test_tran <- predict(preproc, test)
-
-x <- select(train_tran, -plot, -dbh_rate)
-y <- select(train_tran, dbh_rate)
+x <- select(train, -plot, -dbh_rate)
+y <- train[,1]
 
 
 #####################################################################
 # Train full model
 #####################################################################
 
-# calculates RMSE:
-RMSE <- function(true_ratings, predicted_ratings){
-  sqrt(mean((true_ratings - predicted_ratings)^2))
-}
-
-
 set.seed(1)
-model_dbh_full <- 
+dbh_growth_model_full <- 
   train(x, y,
         method = "ranger",
+        preProcess = c("center", "scale", "YeoJohnson"),
         num.trees = 200,
         importance = 'impurity',
         tuneGrid = data.frame(mtry = seq(12, 16, by = 2),
@@ -70,11 +56,16 @@ model_dbh_full <-
 # Results full model
 #####################################################################
 
-model_dbh_full$results
+# calculates RMSE:
+RMSE <- function(true_ratings, predicted_ratings){
+  sqrt(mean((true_ratings - predicted_ratings)^2))
+}
 
-plot(model_dbh_full)
+dbh_growth_model_full$results
 
-varImp(model_dbh_full, scale = F)
+plot(dbh_growth_model_full)
+
+varImp(dbh_growth_model_full, scale = F)
 
 
 #####################################################################
@@ -85,9 +76,10 @@ x2 <- select(x, -landscape, -site_class, -crown_class_s,
              -tree_class_s, -aspect, -slope, -stocking_s, -elev)
 
 set.seed(1)
-model_dbh_op <- 
+dbh_growth_model_op <- 
   train(x2, y,
         method = "ranger",
+        preProcess = c("center", "scale", "YeoJohnson"),
         num.trees = 200,
         importance = 'impurity',
         tuneGrid = data.frame(mtry = seq(4, 8, by = 2),
@@ -99,17 +91,16 @@ model_dbh_op <-
 # Results operational model
 #####################################################################
 
-model_dbh_op$results
+dbh_growth_model_op$results
 
-plot(model_dbh_op)
+plot(dbh_growth_model_op)
 
-varImp(model_dbh_op, scale = F)
+varImp(dbh_growth_model_op, scale = F)
 
 
 #####################################################################
 # Save
 #####################################################################
 
-save(preproc, file = "rda/preproc.rda")
-save(model_dbh_full, file = "rda/model-dbh-full.rda")
-save(model_dbh_op, file = "rda/model-dbh-op.rda")
+save(dbh_growth_model_full, file = "../big-rdas/dbh-growth-model-full.rda")
+# save(dbh_growth_model_op, file = "../big-rdas/dbh-growth-model-op.rda")
