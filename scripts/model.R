@@ -72,8 +72,13 @@ varImp(dbh_growth_model_full, scale = F)
 # Train operational model
 #####################################################################
 
-x2 <- select(x, -landscape, -site_class, -crown_class_s, 
-             -tree_class_s, -aspect, -slope, -stocking_s, -elev)
+x2 <- select(x, 
+             -landscape, 
+             -crown_class, 
+             -tree_class, 
+             -aspect, 
+             -slope, 
+             -stocking)
 
 set.seed(1)
 dbh_growth_model_op <- 
@@ -82,9 +87,9 @@ dbh_growth_model_op <-
         preProcess = c("center", "scale", "YeoJohnson"),
         num.trees = 200,
         importance = 'impurity',
-        tuneGrid = data.frame(mtry = seq(4, 8, by = 2),
-                             splitrule = rep("variance", 3),
-                             min.node.size = rep(5, 3)))
+        tuneGrid = data.frame(mtry = seq(2, 10, by = 2),
+                             splitrule = rep("variance", 5),
+                             min.node.size = rep(5, 5)))
 
 
 #####################################################################
@@ -103,4 +108,4 @@ varImp(dbh_growth_model_op, scale = F)
 #####################################################################
 
 save(dbh_growth_model_full, file = "../big-rdas/dbh-growth-model-full.rda")
-# save(dbh_growth_model_op, file = "../big-rdas/dbh-growth-model-op.rda")
+save(dbh_growth_model_op, file = "../big-rdas/dbh-growth-model-op.rda")
