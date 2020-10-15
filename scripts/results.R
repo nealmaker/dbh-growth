@@ -56,7 +56,7 @@ pdp::plotPartial(pd5, levelplot = FALSE, zlab = "dbh rate",
 #####################
 
 errors_full <- test %>% 
-  mutate(pred = predict(model_dbh_full, newdata = test_tran),
+  mutate(pred = predict(dbh_growth_model_full, newdata = test),
          error = dbh_rate - pred)
 
 errors_op <- test %>% 
@@ -132,10 +132,10 @@ View(errors_full %>% group_by(spp) %>%
        left_join(err_op_spp))
 
 # Species-specific RMSEs
-spp_RMSE <- data.frame(spp = unique(errors_op$spp),
-                       nRMSE = rep(0, length(unique(errors_op$spp))))
+spp_RMSE <- data.frame(spp = unique(errors_full$spp),
+                       nRMSE = rep(0, length(unique(errors_full$spp))))
 
-for (i in 1:length(unique(errors_op$spp))){
-  x <- filter(errors_op, spp == unique(errors_op$spp)[i])
+for (i in 1:length(unique(errors_full$spp))){
+  x <- filter(errors_full, spp == unique(errors_full$spp)[i])
   spp_RMSE[i, 2] <- RMSE(x$dbh_rate, x$pred)/mean(x$dbh_rate)
 }

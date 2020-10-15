@@ -14,7 +14,8 @@ nf_fia <- nf_fia %>%
   filter(status_change == "lived") %>% 
   select(dbh_rate, spp, dbh_mid, cr_mid, crown_class_s, tree_class_s,
          ba_mid, bal_mid, forest_type_s, stocking_s, landscape, 
-         site_class, slope, aspect, lat, lon, elev, plot) %>% 
+         site_class, slope, aspect, lat, lon, elev, ba_ash:`bal_yellow birch`, 
+         plot) %>% 
   rename(dbh = dbh_mid, cr = cr_mid, crown_class = crown_class_s,
          tree_class = tree_class_s, ba = ba_mid, bal = bal_mid,
          forest_type = forest_type_s, stocking = stocking_s)
@@ -47,9 +48,9 @@ dbh_growth_model_full <-
         preProcess = c("center", "scale", "YeoJohnson"),
         num.trees = 200,
         importance = 'impurity',
-        tuneGrid = data.frame(mtry = seq(12, 16, by = 2),
-                              splitrule = rep("variance", 3),
-                              min.node.size = rep(5, 3)))
+        tuneGrid = data.frame(mtry = seq(2, 10, by = 2),
+                              splitrule = rep("variance", 5),
+                              min.node.size = rep(5, 5)))
 
 
 #####################################################################
@@ -107,5 +108,5 @@ varImp(dbh_growth_model_op, scale = F)
 # Save
 #####################################################################
 
-save(dbh_growth_model_full, file = "../big-rdas/dbh-growth-model-full.rda")
+save(dbh_growth_model_full, file = "../big-rdas/dbh-growth-model-sppspec.rda")
 save(dbh_growth_model_op, file = "../big-rdas/dbh-growth-model-op.rda")
