@@ -1,0 +1,216 @@
+---
+title: "DBH Increment Model"
+subtitle: "for the Northern Forest"
+author: "Neal Maker"
+output: html_notebook
+---
+
+# Project Goals
+
+1. Spot check numerous algorithms for modeling tree diameter growth, which represent a diversity of methodologies. Focus on:
+  - model accuracy
+  - size of model object (to address memory concerns in simulator)
+  - prediction time
+2. Explore promising algorithms more thoroughly. Consider:
+  - variable selection (perhaps removing factors with near-zero variance)
+  - parameter optimization with grid- or hyperparameter-searching
+3. Train a 'best case' model for use in simulator
+4. Re-parameterize existing, published models for comparison
+
+# Data
+
+```{r fetch}
+temp <- tempfile()
+download.file(
+  "https://github.com/nealmaker/fia-data-nf/raw/master/rda/nf-fia.rda", 
+  temp)
+load(temp)
+
+# remove trees that died and unwanted variables
+nf_fia <- nf_fia %>%
+  filter(status_change == "lived") %>% 
+  select(dbh_rate, spp, dbh_mid, cr_mid, crown_class_s, tree_class_s,
+         ba_mid, bal_mid, forest_type_s, stocking_s, landscape, 
+         site_class, slope, aspect, lat, lon, elev, ba_ash:`bal_yellow birch`, 
+         plot) %>% 
+  rename(dbh = dbh_mid, cr = cr_mid, crown_class = crown_class_s,
+         tree_class = tree_class_s, ba = ba_mid, bal = bal_mid,
+         forest_type = forest_type_s, stocking = stocking_s)
+```
+
+Forest Inventory and Analysis (FIA) data were used from the US Northern Forest region. They consisted of observations of `r nrow(nf_fia)` remeasured trees, located in `r length(unique(nf_fia[, ncol(nf_fia)]))` different FIA plots. Detals are available at the project's [GitHub page](https://github.com/nealmaker/fia-data-nf).
+
+The data include `r ncol(nf_fia) - 2` potential predictors, which include individual tree attributes as well as plot-level attributes and site attributes. Three of the predictors began as non-sequential categorical variables, and the rest were numeric.
+
+# Preprocessing and Splitting
+
+The three categorical variables were re-coded using one-hot encoding, to allow for their incoporation in various regression models. Many of the predictors are related to species-specific plot basal area and species-specific overtopping basal area. These tend to have very low variance, but were believed to be important in agregate, much like dummy variables. For this reason factors with near-zero variance were not removed. 
+
+```{r preprocess}
+# one-hot encoding for categorical factors (but not plot)
+plot <- nf_fia$plot
+nf_fia <- select(nf_fia, -plot)
+
+dummies <- dummyVars(dbh_rate ~ ., data = nf_fia)
+nf_fia <- predict(dummies, newdata = nf_fia) %>% cbind(plot)
+
+# remove factors with near-zero variance
+# THIS WOULD REMOVE MOST ONE-HOTS AND SPP-SPEC BA/BALs
+# nzv <- nearZeroVar(nf_fia)
+# out <- nf_fia[, -nzv]
+# dim(out)
+```
+
+```{r split}
+# test set is 20% of full dataset
+test_size <- .2
+
+# define test set based on plots (to make it truely independent)
+set.seed(10)
+test_plots <- sample(unique(nf_fia[, ncol(nf_fia)]), 
+                     size = round(test_size * 
+                                    length(unique(nf_fia[, ncol(nf_fia)]))), 
+                     replace = FALSE)
+
+index <- which(nf_fia[, ncol(nf_fia)] %in% test_plots)
+train <- nf_fia[-index, -ncol(nf_fia)]
+test <- nf_fia[index, -ncol(nf_fia)]
+
+# sample from training data to expediate algorithm testing
+subsamp_size <- 10000
+set.seed(201)
+subsamp <- sample(1:nrow(train), 
+                  size = subsamp_size,
+                  replace = FALSE)
+
+nf_sub <- train[subsamp, ]
+x <- nf_sub[, -1]
+y <- nf_sub[, 1]
+```
+
+Data from `r 100 * test_size`% of all the sample plots in the data was set aside for testing the final model. Data were split based on plots to make sure that the testing data was truly independent. The data from the remaining `r 100 * (1 - test_size)`% of plots were used to explore different algorithms and to train the final model. Spot checking of numerous algorithms would have been very slow on all the training data, so a random sample of `r subsamp_size` observations was used instead.
+
+```{r test_options}
+# Repeated cross validation
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+seed <- 7
+metric <- "RMSE"
+```
+
+```{r spot_checks}
+# generalized linear model
+set.seed(seed)
+fit.glmnet <- train(x, y, method = 'glmnet', metric=metric, 
+                    preProc=c("center", "scale"), trControl=control)
+# ridge regression
+set.seed(seed)
+fit.ridge <- train(x, y, method = 'ridge', metric=metric, 
+                   preProc=c("center", "scale"), trControl=control)
+# quantile regression with LASSO penalty
+set.seed(seed)
+fit.lasso <- train(x, y, method = 'rqlasso', metric=metric, 
+                   preProc=c("center", "scale"), trControl=control)
+# neural network (one layer)
+set.seed(seed)
+fit.nnet <- train(x, y, method = 'nnet', metric=metric, 
+                  preProc=c("center", "scale"), trControl=control)
+# linear support vector machine
+set.seed(seed)
+fit.svmLinear <- train(x, y, method = 'svmLinear', metric=metric, 
+                       preProc=c("center", "scale"), trControl=control)
+# radial support vector machine
+set.seed(seed)
+fit.svmRadial <- train(x, y, method = 'svmRadial', metric=metric, 
+                       preProc=c("center", "scale"), trControl=control)
+# k-nearest neighbor
+set.seed(seed)
+fit.knn <- train(x, y, method = 'knn', metric=metric, 
+                 preProc=c("center", "scale"), trControl=control)
+# bayesian ridge regression
+set.seed(seed)
+fit.bridge <- train(x, y, method = 'bridge', metric=metric, 
+                    preProc=c("center", "scale"), trControl=control)
+# cart (trees)
+set.seed(seed)
+fit.cart <- train(x, y, method = 'rpart', metric=metric, 
+                  preProc=c("center", "scale"), trControl=control)
+# C4.5-like trees
+set.seed(seed)
+fit.j48 <- train(x, y, method = 'J48', metric=metric, 
+                 preProc=c("center", "scale"), trControl=control)
+# bagged trees
+set.seed(seed)
+fit.bagcart <- train(x, y, method = 'treebag', metric=metric, 
+                     preProc=c("center", "scale"), trControl=control)
+# random forest
+set.seed(seed)
+fit.rf <- train(x, y, method = 'ranger', metric=metric, 
+                preProc=c("center", "scale"), trControl=control)
+# gradient boosting machine
+set.seed(seed)
+fit.gbm <- train(x, y, method = 'gbm', metric=metric, 
+                 preProc=c("center", "scale"), trControl=control, verbose=FALSE)
+# bayesian additive regression trees
+set.seed(seed)
+fit.bart <- train(x, y, method = 'bartMachine', metric=metric, 
+                  preProc=c("center", "scale"), trControl=control)
+```
+
+```{r compile_spots}
+fits <- list(
+  glmnet = fit.glmnet, 
+  ridge = fit.ridge,
+  lasso = fit.lasso,
+  nnet = fit.nnet,
+  svmLinear = fit.svmLinear,
+  svmRadial = fit.svmRadial,
+  knn = fit.knn,
+  bridge = fit.bridge,
+  cart = fit.cart,
+  j48 = fit.j48,
+  bagcart = fit.bagcart,
+  rf = fit.rf,
+  gbm = fit.gbm,
+  bart = fit.bart)
+
+results <- resamples(fits)
+sizes <- sapply(1:length(fits), function(i) {lobstr::obj_size(fits[[i]])})
+predtimes <- lapply(1:length(fits), function(j) {
+  times <- sapply(1:30, function(k) {
+    system.time(predict(fits[[j]], 
+                        newdata = train[sample(1:nrow(train), 10000, 
+                                               replace = F), ]))[[3]]
+  })
+  return(data.frame(model = rep(names(fits)[[j]], 30),
+                    time = times))
+})
+predtimes <- do.call(rbind, predtimes)
+```
+
+# Spot Checking
+
+A diverse set of `r length(fits)` algorithms was successfully spot-checked using repeated ten-fold cross validation, with root mean square error as the evaluation metric. 
+
+``` {r spotResults, fig.cap="Accuracies of spot-checked algorithms, using three metrics. Accuracies were estimated using repeated cross validation."}
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(results, scales = scales)
+```
+
+```{r spotPredtimes, fig.cap="Prediction times for spot-checked algorithms, based on 30 random samples of 10,000 trees each."}
+predtimes %>% ggplot(aes(model, time)) + 
+  geom_boxplot() + 
+  coord_flip() + 
+  scale_y_continuous(name = "seconds to make 10,000 predictions")
+```
+
+```{r spotSizes, fig.cap="Sizes of spot-checked model objects."}
+data.frame(model = names(fits), size = sizes) %>% 
+  mutate(size = size / 1000000) %>% 
+  ggplot(aes(model, size)) + 
+  geom_point(size = 2) + 
+  geom_segment( aes(x=model, xend=model, y=0, yend=size)) + 
+  coord_flip() +
+  scale_y_continuous(name = "model size (megabytes)")
+```
+
+The spot-checking demonstrated that non-linear methods, like neural networks
